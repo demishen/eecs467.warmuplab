@@ -261,17 +261,17 @@ int main(int argc, char **argv)
 
     // Initialize a parameter gui
     parameter_gui_t *pg = pg_create();
-    pg_add_double_slider(pg, "sl1", "Slider 1", 0, 100, 50);
-    pg_add_int_slider(pg, "sl2", "Slider 2", 0, 100, 25);
-    pg_add_check_boxes(pg,
-                       "cb1", "Check Box 1", 0,
-                       "cb2", "Check Box 2", 1,
-                       NULL);
-    pg_add_buttons(pg,
-                   "but1", "Button 1",
-                   "but2", "Button 2",
-                   "but3", "Button 3",
-                   NULL);
+    // pg_add_double_slider(pg, "sl1", "Slider 1", 0, 100, 50);
+    // pg_add_int_slider(pg, "sl2", "Slider 2", 0, 100, 25);
+    // pg_add_check_boxes(pg,
+    //                    "cb1", "Check Box 1", 0,
+    //                    "cb2", "Check Box 2", 1,
+    //                    NULL);
+    // pg_add_buttons(pg,
+    //                "but1", "Button 1",
+    //                "but2", "Button 2",
+    //                "but3", "Button 3",
+    //                NULL);
 
     parameter_listener_t *my_listener = calloc(1,sizeof(parameter_listener_t*));
     my_listener->impl = NULL;
