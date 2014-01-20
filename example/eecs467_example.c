@@ -67,7 +67,7 @@ void* render_loop(void *data)
 
     // Continue running until we are signaled otherwise. This happens
     // when the window is closed/Ctrl+C is received.
-    while (state->running) {
+    // while (state->running) {
 
         // Get the most recent camera frame and render it to screen.
         if (isrc != NULL) {
@@ -79,62 +79,115 @@ void* render_loop(void *data)
                 printf("get_frame fail: %d\n", res);
             } else {
                 // Handle frame
-                image_u32_t *im = image_u32_create_from_pnm("Waldo_template.ppm");
-                if (im != NULL) {
+                image_u32_t *im = image_u32_create_from_pnm("Waldo_search.ppm");
+                image_u32_t *template = image_u32_create_from_pnm("Waldo_template.ppm");
 
-                    vx_object_t *vim = vxo_image_from_u32(im,
-                                                          VXO_IMAGE_FLIPY,
-                                                          VX_TEX_MIN_FILTER | VX_TEX_MAG_FILTER);
+                vx_object_t *vim = vxo_image_from_u32(im,
+                                                      VXO_IMAGE_FLIPY,
+                                                      VX_TEX_MIN_FILTER | VX_TEX_MAG_FILTER);
 
-                    vx_buffer_add_back(vx_world_get_buffer(state->world, "image"),
-                                       vxo_chain(vxo_mat_translate3(-im->width/2,-im->height/2,0),
-                                                 vim));
-                    vx_buffer_swap(vx_world_get_buffer(state->world, "image"));
-                    image_u32_destroy(im);
+
+                vx_object_t *vtemplate = vxo_image_from_u32(template,
+                                                      VXO_IMAGE_FLIPY,
+                                                      VX_TEX_MIN_FILTER | VX_TEX_MAG_FILTER);
+
+
+                double error = 0;
+                double min_error = 10000000;
+                int min_x, min_y;
+
+                for(int image_offset_x = 0; image_offset_x < im->width-template->width; image_offset_x++) {
+                    for(int image_offset_y = 0; image_offset_y < im->height-template->height; image_offset_y++) {
+                        for (int ty = 0; ty < theight; ty++) {
+                            for (int tx = 0; tx < twidth; tx++) {
+                                int t_idx = ty*template->stride + tx;
+                                int im_idx = (image_offset_y+ty)*im->stride + (image_offset_x+tx);
+                                int template_abgr = template->buf[t_idx];
+                                int image_abgr = im->buf[im_idx];
+
+                                int template_red = (template_abgr >> 0)&0xff;
+                                int image_red = (image_abgr >> 0)&0xff;
+                                int template_green = (template_abgr >> 8)&0xff;
+                                int image_green = (image_abgr >> 8)&0xff;
+                                int template_blue = (template_abgr >> 16)&0xff;
+                                int image_blue = (image_abgr >> 16)&0xff;
+
+                                error +=  sqrt(pow(template_red - image_red,2) +
+                                               pow(template_green - image_green,2) +
+                                               pow(template_blue - image_blue,2));
+                            }
+                        }
+                        if(error < min_error) {
+                            min_error = error;
+                            min_x = image_offset_x;
+                            min_y = image_offset_y;
+                        }
+                    }
                 }
+                // adjust display using vxo_chain
+                vx_buffer_add_back(vx_world_get_buffer(state->world, "image"),
+                                   vxo_chain(vxo_mat_translate3(-im->width/2,-im->height/2,0),
+                                             vim));
+
+                // adding the red rectangle over the image
+                vo = vxo_chain(vxo_mat_translate2(min_x,min_y),
+                       vxo_rect(vxo_lines_style(vx_red, 2)));
+
+                vx_buffer_add_back(vx_world_get_buffer(state->world, "image"), vo);
+
+
+                vx_buffer_swap(vx_world_get_buffer(state->world, "image"));
+                image_u32_destroy(im);
+                image_u32_destroy(template);
+
+            
             }
 
             fflush(stdout);
             // isrc->release_frame(isrc, frmd);
         }
 
-        // Example rendering of vx primitives
-        double rad = (vx_mtime() % 5000) * 2 * M_PI / 5e3;   // [0,2PI]
-        double osc = ((vx_mtime() % 5000) / 5e3) * 2 - 1;    // [-1, 1]
 
-        // Creates a blue box and applies a series of rigid body transformations
-        // to it. A vxo_chain applies its arguments sequentially. In this case,
-        // then, we rotate our coordinate frame by rad radians, as determined
-        // by the current time above. Then, the origin of our coordinate frame
-        // is translated 0 meters along its X-axis and 10 meters along its
-        // Y-axis. Finally, a 1x1x1 cube (or box) is rendered centered at the
-        // origin, and is rendered with the blue mesh style, meaning it has
-        // solid, blue sides.
-        vx_object_t *vo = vxo_chain(vxo_mat_rotate_z(rad),
-                                    vxo_mat_translate2(0,10),
-                                    vxo_sphere(vxo_mesh_style(vx_blue)));
 
-        // Then, we add this object to a buffer awaiting a render order
-        vx_buffer_add_back(vx_world_get_buffer(state->world, "rot-sphere"), vo);
 
-        // Now we will render a red box that translates back and forth. This
-        // time, there is no rotation of our coordinate frame, so the box will
-        // just slide back and forth along the X axis. This box is rendered
-        // with a red line style, meaning it will appear as a red wireframe,
-        // in this case, with lines 2 px wide.
-        vo = vxo_chain(vxo_mat_translate2(osc*5,0),
-                       vxo_box(vxo_lines_style(vx_red, 2)));
 
-        // We add this object to a different buffer so it may be rendered
-        // separately if desired
-        vx_buffer_add_back(vx_world_get_buffer(state->world, "osc-square"), vo);
+        // // Example rendering of vx primitives
+        // double rad = (vx_mtime() % 5000) * 2 * M_PI / 5e3;   // [0,2PI]
+        // double osc = ((vx_mtime() % 5000) / 5e3) * 2 - 1;    // [-1, 1]
 
-        // Now, we update both buffers
-        vx_buffer_swap(vx_world_get_buffer(state->world, "rot-sphere"));
-        vx_buffer_swap(vx_world_get_buffer(state->world, "osc-square"));
+        // // Creates a blue box and applies a series of rigid body transformations
+        // // to it. A vxo_chain applies its arguments sequentially. In this case,
+        // // then, we rotate our coordinate frame by rad radians, as determined
+        // // by the current time above. Then, the origin of our coordinate frame
+        // // is translated 0 meters along its X-axis and 10 meters along its
+        // // Y-axis. Finally, a 1x1x1 cube (or box) is rendered centered at the
+        // // origin, and is rendered with the blue mesh style, meaning it has
+        // // solid, blue sides.
+        // vx_object_t *vo = vxo_chain(vxo_mat_rotate_z(rad),
+        //                             vxo_mat_translate2(0,10),
+        //                             vxo_sphere(vxo_mesh_style(vx_blue)));
+
+        // // Then, we add this object to a buffer awaiting a render order
+        // vx_buffer_add_back(vx_world_get_buffer(state->world, "rot-sphere"), vo);
+
+        // // Now we will render a red box that translates back and forth. This
+        // // time, there is no rotation of our coordinate frame, so the box will
+        // // just slide back and forth along the X axis. This box is rendered
+        // // with a red line style, meaning it will appear as a red wireframe,
+        // // in this case, with lines 2 px wide.
+        // vo = vxo_chain(vxo_mat_translate2(osc*5,0),
+        //                vxo_box(vxo_lines_style(vx_red, 2)));
+
+        // // We add this object to a different buffer so it may be rendered
+        // // separately if desired
+        // vx_buffer_add_back(vx_world_get_buffer(state->world, "osc-square"), vo);
+
+        // // Now, we update both buffers
+        // vx_buffer_swap(vx_world_get_buffer(state->world, "rot-sphere"));
+        // vx_buffer_swap(vx_world_get_buffer(state->world, "osc-square"));
 
         usleep(1000000/fps);
-    }
+    // }
 
     if (isrc != NULL)
         isrc->stop(isrc);
